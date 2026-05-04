@@ -9,26 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/kbsink-org/kbsink-cli/internal/plugin/douyin"
-	"github.com/kbsink-org/kbsink-cli/internal/plugin/wechat"
-	"github.com/kbsink-org/kbsink-cli/internal/plugin/xhs"
+	"github.com/kbsink-org/kbsink-cli/internal/convertlib"
 	kbsink "github.com/kbsink-org/kbsink/pkg"
 	"github.com/kbsink-org/kbsink/pkg/core"
 	"github.com/kbsink-org/kbsink/pkg/pluginreg"
 )
-
-var registerOnce sync.Once
-
-func ensurePluginsRegistered() {
-	registerOnce.Do(func() {
-		pluginreg.Register(wechat.New())
-		pluginreg.Register(xhs.New())
-		pluginreg.Register(douyin.New())
-	})
-}
 
 // Run parses argv: optional flags then a single URL (or share text containing a URL).
 // Exit codes: 0 success, 1 error, 2 usage.
@@ -49,7 +36,7 @@ func Run(args []string) int {
 		_, _ = fmt.Fprintf(fs.Output(), "Usage:\n  %s [flags] <article-url-or-share-text>\n\nFlags:\n", prog)
 		fs.PrintDefaults()
 		_, _ = fmt.Fprintf(fs.Output(), "\nIf --plugin is omitted, the tool picks wechat, xhs, or douyin from the URL host.\n")
-		ensurePluginsRegistered()
+		convertlib.EnsurePluginsRegistered()
 		if names := pluginreg.Names(); len(names) > 0 {
 			_, _ = fmt.Fprintf(fs.Output(), "Plugins in this build: %s\n", strings.Join(names, ", "))
 		}
@@ -81,12 +68,12 @@ func Run(args []string) int {
 		return 1
 	}
 
-	ensurePluginsRegistered()
+	convertlib.EnsurePluginsRegistered()
 
 	pluginName := strings.TrimSpace(*pluginFlag)
 	if pluginName == "" {
 		var ok bool
-		pluginName, ok = DetectPlugin(articleURL)
+		pluginName, ok = convertlib.DetectPlugin(articleURL)
 		if !ok {
 			emitError(fmt.Errorf("could not infer --plugin from URL; set explicitly (wechat, xhs, douyin); registered: %s",
 				strings.Join(pluginreg.Names(), ", ")))

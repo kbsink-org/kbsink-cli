@@ -79,9 +79,54 @@ jobs:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: kbsink-cli/release/*
 
+  wasm:
+    name: wasm-js
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kbsink-cli
+
+      - uses: actions/checkout@v4
+        with:
+          repository: kbsink-org/kbsink
+          ref: main
+          path: kbsink
+
+      - uses: actions/checkout@v4
+        with:
+          repository: kbsink-org/douyin-plugin
+          ref: main
+          path: douyin-plugin
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: kbsink-cli/go.mod
+          cache-dependency-path: kbsink-cli/go.sum
+
+      - name: Pack wasm + wasm_exec.js
+        working-directory: kbsink-cli
+        env:
+          CGO_ENABLED: "0"
+          GOOS: js
+          GOARCH: wasm
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME}"
+          go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
+          mkdir -p release
+          cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" release/
+          cp kbsink.wasm release/
+          (cd release && tar -czf "kbsink_${ver}_wasm_js.tar.gz" wasm_exec.js kbsink.wasm)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-wasm-js
+          path: kbsink-cli/release/*.tar.gz
+
   publish:
     name: GitHub Release
-    needs: build
+    needs: [build, wasm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

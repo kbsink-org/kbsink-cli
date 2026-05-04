@@ -16,6 +16,32 @@ Or build:
 go build -o kbsink ./cmd/kbsink
 ```
 
+### WebAssembly (for JavaScript hosts)
+
+Build the wasm binary (requires Go’s `js/wasm` target):
+
+```bash
+GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
+```
+
+Load `kbsink.wasm` together with Go’s loader script from `$(go env GOROOT)/misc/wasm/wasm_exec.js` (see the [Go WebAssembly wiki](https://go.dev/wiki/WebAssembly)). After `go.run(instance)` has started the program, call **`globalThis.kbsinkConvertJSON`** with a **single string** argument: JSON describing the request. It returns a JSON string (synchronous; can block while fetching the article).
+
+Request shape:
+
+```json
+{
+  "url": "https://mp.weixin.qq.com/s/…",
+  "plugin": "wechat",
+  "videoMode": "link",
+  "timeoutMs": 60000,
+  "outputRoot": "output"
+}
+```
+
+`plugin` is optional if the URL host is recognized (same rules as the CLI). `videoMode` is `link` or `embed` (default `link`). The wasm build uses in-memory storage only: the response includes `markdown` and each asset’s `dataBase64` instead of writing to the host filesystem.
+
+In a **browser** tab, article and CDN requests are subject to **CORS**; hosts that do not allow your origin may fail. **Node.js** (or another non-browser runtime with the same `wasm_exec` bridge) is often easier for unrestricted HTTP.
+
 ## Usage
 
 ```text
