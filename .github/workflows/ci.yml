@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kbsink-cli
+
+      - uses: actions/checkout@v4
+        with:
+          repository: kbsink-org/kbsink
+          ref: main
+          path: kbsink
+
+      - uses: actions/checkout@v4
+        with:
+          repository: kbsink-org/douyin-plugin
+          ref: main
+          path: douyin-plugin
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: kbsink-cli/go.mod
+          cache-dependency-path: kbsink-cli/go.sum
+
+      - name: Test
+        working-directory: kbsink-cli
+        run: go test ./... -count=1
+
+      - name: Build kbsink (linux amd64 artifact)
+        working-directory: kbsink-cli
+        env:
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags="-s -w" -o kbsink ./cmd/kbsink
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: kbsink-linux-amd64
+          path: kbsink-cli/kbsink
