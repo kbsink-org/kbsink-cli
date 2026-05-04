@@ -24,7 +24,7 @@ Build the wasm binary (requires Go’s `js/wasm` target):
 GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
 ```
 
-Load `kbsink.wasm` together with Go’s loader script from `$(go env GOROOT)/misc/wasm/wasm_exec.js` (see the [Go WebAssembly wiki](https://go.dev/wiki/WebAssembly)). After `go.run(instance)` has started the program, call **`globalThis.kbsinkConvertJSON`** with a **single string** argument: JSON describing the request. It returns a JSON string (synchronous; can block while fetching the article).
+Load `kbsink.wasm` together with Go’s loader script from `$(go env GOROOT)/lib/wasm/wasm_exec.js` (Go 1.25+), or `misc/wasm/wasm_exec.js` on older toolchains (see the [Go WebAssembly wiki](https://go.dev/wiki/WebAssembly)). After `go.run(instance)` has started the program, call **`globalThis.kbsinkConvertJSON`** with a **single string** argument: JSON describing the request. It returns a JSON string (synchronous; can block while fetching the article).
 
 Request shape:
 

@@ -115,7 +115,16 @@ jobs:
           ver="${GITHUB_REF_NAME}"
           go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
           mkdir -p release
-          cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" release/
+          goroot="$(go env GOROOT)"
+          wasm_exec=""
+          for cand in "$goroot/lib/wasm/wasm_exec.js" "$goroot/misc/wasm/wasm_exec.js"; do
+            if [ -f "$cand" ]; then wasm_exec="$cand"; break; fi
+          done
+          if [ -z "$wasm_exec" ]; then
+            echo "wasm_exec.js not found under GOROOT=$goroot" >&2
+            exit 1
+          fi
+          cp "$wasm_exec" release/wasm_exec.js
           cp kbsink.wasm release/
           (cd release && tar -czf "kbsink_${ver}_wasm_js.tar.gz" wasm_exec.js kbsink.wasm)
 

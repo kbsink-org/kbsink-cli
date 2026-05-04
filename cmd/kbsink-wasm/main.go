@@ -6,7 +6,7 @@
 //
 //	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
 //
-// Load with GOROOT's misc/wasm/wasm_exec.js, then call globalThis.kbsinkConvertJSON(reqJsonString).
+// Load with GOROOT's lib/wasm/wasm_exec.js (Go 1.25+) or misc/wasm/wasm_exec.js, then call globalThis.kbsinkConvertJSON(reqJsonString).
 package main
 
 import (
@@ -26,16 +26,16 @@ func main() {
 }
 
 type wasmRequest struct {
-	URL         string `json:"url"`
-	Plugin      string `json:"plugin,omitempty"`
-	VideoMode   string `json:"videoMode,omitempty"`
-	TimeoutMs   int    `json:"timeoutMs,omitempty"`
-	OutputRoot  string `json:"outputRoot,omitempty"`
+	URL        string `json:"url"`
+	Plugin     string `json:"plugin,omitempty"`
+	VideoMode  string `json:"videoMode,omitempty"`
+	TimeoutMs  int    `json:"timeoutMs,omitempty"`
+	OutputRoot string `json:"outputRoot,omitempty"`
 }
 
 type wasmResponse struct {
-	OK     bool                        `json:"ok"`
-	Error  string                      `json:"error,omitempty"`
+	OK     bool                    `json:"ok"`
+	Error  string                  `json:"error,omitempty"`
 	Result *convertlib.ArticleJSON `json:"result,omitempty"`
 }
 
