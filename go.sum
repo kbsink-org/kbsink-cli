@@ -27,8 +27,8 @@ github.com/aws/smithy-go v1.25.0/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqx
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/kbsink-org/douyin-plugin v1.1.0 h1:EPXYJBhSgkJE+ej2u8J60gnuUl+cBcPYcFQ/fagENlo=
 github.com/kbsink-org/douyin-plugin v1.1.0/go.mod h1:Nbyy+WRS9qYloCcsQQY2x30VyYKisDOS0Q755bL2eXc=
-github.com/kbsink-org/kbsink v1.5.0 h1:xyMLxbUSQ7AKZfUkuXNntnfXSbfgZSF8A+L4KLFEDcY=
-github.com/kbsink-org/kbsink v1.5.0/go.mod h1:/yYgdy3MiWWQ6Atp4skBSMmIw+H/hGi2vWFG8rPRXC8=
+github.com/kbsink-org/kbsink v1.6.0 h1:8WBdqVVLC5U+wST7rnWJLaKqVuMVVOdKKntjEoXWHZs=
+github.com/kbsink-org/kbsink v1.6.0/go.mod h1:/yYgdy3MiWWQ6Atp4skBSMmIw+H/hGi2vWFG8rPRXC8=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=

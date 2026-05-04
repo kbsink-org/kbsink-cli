@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/kbsink-org/douyin-plugin v1.1.0
-	github.com/kbsink-org/kbsink v1.5.0
+	github.com/kbsink-org/kbsink v1.6.0
 )
 
 require (

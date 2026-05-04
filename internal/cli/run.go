@@ -62,7 +62,11 @@ func Run(args []string) int {
 		fs.Usage()
 		return 2
 	}
-	articleURL := fs.Arg(0)
+	articleURL := strings.TrimSpace(fs.Arg(0))
+	if articleURL == "" {
+		fs.Usage()
+		return 2
+	}
 
 	ctx := context.Background()
 	if *timeout > 0 {
