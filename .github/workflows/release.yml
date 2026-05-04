@@ -30,23 +30,23 @@ jobs:
           - goos: windows
             goarch: amd64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: kbsink-cli
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: kbsink-org/kbsink
           ref: main
           path: kbsink
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: kbsink-org/douyin-plugin
           ref: main
           path: douyin-plugin
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: kbsink-cli/go.mod
           cache-dependency-path: kbsink-cli/go.sum
@@ -74,7 +74,7 @@ jobs:
             tar -czf "release/${asset}.tar.gz" "$final"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: kbsink-cli/release/*
@@ -83,23 +83,23 @@ jobs:
     name: wasm-js
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: kbsink-cli
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: kbsink-org/kbsink
           ref: main
           path: kbsink
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: kbsink-org/douyin-plugin
           ref: main
           path: douyin-plugin
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: kbsink-cli/go.mod
           cache-dependency-path: kbsink-cli/go.sum
@@ -128,7 +128,7 @@ jobs:
           cp kbsink.wasm release/
           (cd release && tar -czf "kbsink_${ver}_wasm_js.tar.gz" wasm_exec.js kbsink.wasm)
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: binary-wasm-js
           path: kbsink-cli/release/*.tar.gz
@@ -138,7 +138,7 @@ jobs:
     needs: [build, wasm]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: dist
           pattern: binary-*
@@ -155,7 +155,7 @@ jobs:
           done
           sort -k2 -o SHA256SUMS.txt SHA256SUMS.txt
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: |
