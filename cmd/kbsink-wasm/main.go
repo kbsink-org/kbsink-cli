@@ -7,6 +7,7 @@
 //	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
 //
 // Load with GOROOT's lib/wasm/wasm_exec.js (Go 1.25+) or misc/wasm/wasm_exec.js, then call globalThis.kbsinkConvertJSON(reqJsonString).
+// Optional: globalThis.kbsinkHTTPRoundTrip — host-backed net/http (bridge.go, README).
 package main
 
 import (
@@ -69,6 +70,7 @@ func convertJSON(this js.Value, args []js.Value) any {
 		VideoMode:  req.VideoMode,
 		Timeout:    timeout,
 		OutputRoot: req.OutputRoot,
+		HTTPClient: NewHostBridgedHTTPClient(timeout),
 	})
 	if err != nil {
 		return mustJSON(wasmResponse{OK: false, Error: err.Error()})

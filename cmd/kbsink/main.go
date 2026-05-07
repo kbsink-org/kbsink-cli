@@ -1,11 +1,7 @@
 package main
 
-import (
-	"os"
-
-	"github.com/kbsink-org/kbsink-cli/internal/cli"
-)
+import "os"
 
 func main() {
-	os.Exit(cli.Run(os.Args))
+	os.Exit(run(os.Args))
 }

@@ -42,6 +42,16 @@ Request shape:
 
 In a **browser** tab, article and CDN requests are subject to **CORS**; hosts that do not allow your origin may fail. **Node.js** (or another non-browser runtime with the same `wasm_exec` bridge) is often easier for unrestricted HTTP.
 
+#### Host HTTP hook (`net/http` transport)
+
+The wasm build’s default `*http.Client` uses **`HostTransport`** from **`cmd/kbsink-wasm`** (`bridge.go`, only linked into `kbsink.wasm`): each request goes through **`globalThis.kbsinkHTTPRoundTrip`** when that property is a function; otherwise it falls back to the normal js/wasm `fetch` transport.
+
+- **Signature:** `kbsinkHTTPRoundTrip(payloadJson: string): Promise<string>`
+- **Request JSON:** `{ "method": "GET", "url": "https://…", "headers": { "K": "V" }, "bodyB64": "<optional base64>" }`
+- **Response JSON:** `{ "status": 200, "statusText": "OK", "headers": { … }, "bodyBase64": "<base64>" }` (empty or omitted `bodyBase64` means no body)
+
+Implement this in Obsidian with **`requestUrl`**, or in Node with plain `http`/`https`, to bypass browser CORS while keeping conversion logic in Go.
+
 ## Usage
 
 ```text
