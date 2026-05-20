@@ -4,3 +4,4 @@ dist/
 output/
 *.wasm
 wasm_exec.js
+kbsink

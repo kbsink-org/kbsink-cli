@@ -97,9 +97,16 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	promise := fn.Invoke(js.ValueOf(string(jsonBytes)))
+	ret := fn.Invoke(js.ValueOf(string(jsonBytes)))
+	// Node hosts should return a JSON string synchronously (see scripts/run-wasm.mjs).
+	// Browsers may return a Promise instead.
+	if ret.Type() == js.TypeString {
+		return httpResponseFromJSJSON(ret.String(), req)
+	}
+
+	promise := ret
 	if promise.Type() != js.TypeObject || promise.Get("then").Type() != js.TypeFunction {
-		return nil, fmt.Errorf("%s must return a Promise", GlobalJSName)
+		return nil, fmt.Errorf("%s must return a JSON string or a Promise", GlobalJSName)
 	}
 
 	respCh := make(chan *http.Response, 1)
@@ -108,49 +115,12 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	success = js.FuncOf(func(this js.Value, args []js.Value) any {
 		success.Release()
 		failure.Release()
-		raw := args[0].String()
-		var jr jsHTTPResponse
-		if err := json.Unmarshal([]byte(raw), &jr); err != nil {
-			errCh <- fmt.Errorf("%s: bad JSON: %w", GlobalJSName, err)
+		resp, err := httpResponseFromJSJSON(args[0].String(), req)
+		if err != nil {
+			errCh <- err
 			return nil
 		}
-		var bodyReader io.ReadCloser = http.NoBody
-		if jr.BodyB64 != "" {
-			dec, err := base64.StdEncoding.DecodeString(jr.BodyB64)
-			if err != nil {
-				errCh <- fmt.Errorf("%s: body base64: %w", GlobalJSName, err)
-				return nil
-			}
-			bodyReader = io.NopCloser(bytes.NewReader(dec))
-		}
-		h := make(http.Header)
-		for k, v := range jr.Headers {
-			if v != "" {
-				h.Set(k, v)
-			}
-		}
-		st := jr.Status
-		if st == 0 {
-			st = 200
-		}
-		stText := jr.StatusText
-		if stText == "" {
-			stText = http.StatusText(st)
-			if stText == "" {
-				stText = "status"
-			}
-		}
-		respCh <- &http.Response{
-			Status:        fmt.Sprintf("%d %s", st, stText),
-			StatusCode:    st,
-			Proto:         "HTTP/1.1",
-			ProtoMajor:    1,
-			ProtoMinor:    1,
-			Header:        h,
-			Body:          bodyReader,
-			ContentLength: -1,
-			Request:       req,
-		}
+		respCh <- resp
 		return nil
 	})
 	failure = js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -180,6 +150,49 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, req.Context().Err()
 		}
 	}
+}
+
+func httpResponseFromJSJSON(raw string, req *http.Request) (*http.Response, error) {
+	var jr jsHTTPResponse
+	if err := json.Unmarshal([]byte(raw), &jr); err != nil {
+		return nil, fmt.Errorf("%s: bad JSON: %w", GlobalJSName, err)
+	}
+	var bodyReader io.ReadCloser = http.NoBody
+	if jr.BodyB64 != "" {
+		dec, err := base64.StdEncoding.DecodeString(jr.BodyB64)
+		if err != nil {
+			return nil, fmt.Errorf("%s: body base64: %w", GlobalJSName, err)
+		}
+		bodyReader = io.NopCloser(bytes.NewReader(dec))
+	}
+	h := make(http.Header)
+	for k, v := range jr.Headers {
+		if v != "" {
+			h.Set(k, v)
+		}
+	}
+	st := jr.Status
+	if st == 0 {
+		st = 200
+	}
+	stText := jr.StatusText
+	if stText == "" {
+		stText = http.StatusText(st)
+		if stText == "" {
+			stText = "status"
+		}
+	}
+	return &http.Response{
+		Status:        fmt.Sprintf("%d %s", st, stText),
+		StatusCode:    st,
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        h,
+		Body:          bodyReader,
+		ContentLength: -1,
+		Request:       req,
+	}, nil
 }
 
 // NewHostBridgedHTTPClient returns an [http.Client] using [HostTransport].

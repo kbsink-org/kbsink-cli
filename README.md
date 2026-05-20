@@ -49,7 +49,7 @@ In a **browser** tab, article and CDN requests are subject to **CORS**; **Node.j
 node ./scripts/run-wasm.mjs "https://mp.weixin.qq.com/s/…"
 ```
 
-`run-wasm.mjs` loads `kbsink.wasm`, installs a Node `fetch` HTTP bridge (avoids broken Go wasm DNS on some Macs), runs a conversion, and writes Markdown plus assets under `-o` (default `output`).
+`run-wasm.mjs` is a minimal integration harness: loads `kbsink.wasm`, sync `curl` HTTP bridge for Node, writes Markdown and assets under `-o` (default `output`). Requires `curl` on PATH.
 
 ## Usage
 
