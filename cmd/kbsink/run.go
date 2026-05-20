@@ -4,14 +4,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/kbsink-org/kbsink-cli/internal/convertlib"
+	"github.com/kbsink-org/kbsink-cli/internal/netclient"
 	"github.com/kbsink-org/kbsink/pkg/core"
+	klog "github.com/kbsink-org/kbsink/pkg/logger"
 	"github.com/kbsink-org/kbsink/pkg/pluginreg"
 	"github.com/kbsink-org/kbsink/pkg/storage"
 )
@@ -30,6 +33,7 @@ func run(args []string) int {
 	timeout := fs.Duration("timeout", 60*time.Second, "timeout for the conversion")
 	videoMode := fs.String("video-mode", "link", "video markdown mode: link|embed")
 	pluginFlag := fs.String("plugin", "", "plugin id: wechat, xhs, douyin (optional if the URL host is recognized)")
+	logLevel := fs.String("log-level", "info", "log level: debug|info|warn|error")
 
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(fs.Output(), "Usage:\n  %s [flags] <article-url-or-share-text>\n\nFlags:\n", prog)
@@ -42,6 +46,10 @@ func run(args []string) int {
 	}
 
 	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if err := setupSlog(*logLevel); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "invalid --log-level: %v\n", err)
 		return 2
 	}
 	if fs.NArg() != 1 {
@@ -66,19 +74,16 @@ func run(args []string) int {
 		outRoot = "output"
 	}
 
-	httpClient := http.DefaultClient
-	if *timeout > 0 {
-		httpClient = &http.Client{Timeout: *timeout}
-	}
-
 	res, err := convertlib.ConvertArticle(ctx, convertlib.Params{
 		URL:        articleURL,
 		Plugin:     strings.TrimSpace(*pluginFlag),
 		VideoMode:  *videoMode,
 		Timeout:    *timeout,
 		OutputRoot: outRoot,
-		HTTPClient: httpClient,
-		Storage:    storage.NewLocalStorage(outRoot),
+		HTTP:       netclient.New(*timeout),
+		Storage:    storage.NewLocalStorage(outRoot, nil),
+		KbsinkLog:  klog.Slog{L: slog.Default()},
+		LogLevel:   *logLevel,
 	})
 	if err != nil {
 		emitError(err)

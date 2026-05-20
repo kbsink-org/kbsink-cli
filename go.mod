@@ -3,8 +3,10 @@ module github.com/kbsink-org/kbsink-cli
 go 1.25.0
 
 require (
-	github.com/kbsink-org/douyin-plugin v1.1.0
-	github.com/kbsink-org/kbsink v1.6.0
+	github.com/SolaTyolo/httpclient v1.0.0
+	github.com/hashicorp/go-retryablehttp v0.7.8
+	github.com/kbsink-org/kbsink v1.7.1
+	github.com/kbsink-org/kbsink-plugins v1.2.1
 )
 
 require (
@@ -21,5 +23,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	golang.org/x/net v0.54.0 // indirect
 )

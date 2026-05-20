@@ -5,22 +5,25 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"net/http"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/SolaTyolo/httpclient"
+	"github.com/kbsink-org/kbsink-cli/internal/netclient"
 	"github.com/kbsink-org/kbsink-cli/internal/plugin/douyin"
 	"github.com/kbsink-org/kbsink-cli/internal/plugin/wechat"
 	"github.com/kbsink-org/kbsink-cli/internal/plugin/xhs"
 	kbsink "github.com/kbsink-org/kbsink/pkg"
 	"github.com/kbsink-org/kbsink/pkg/core"
+	klog "github.com/kbsink-org/kbsink/pkg/logger"
 	"github.com/kbsink-org/kbsink/pkg/pluginreg"
 )
 
 var registerOnce sync.Once
 
-// EnsurePluginsRegistered registers wechat, xhs, and douyin once per process.
+// EnsurePluginsRegistered registers built-in platform plugins once per process.
 func EnsurePluginsRegistered() {
 	registerOnce.Do(func() {
 		pluginreg.Register(wechat.New())
@@ -47,10 +50,18 @@ type Params struct {
 	VideoMode  string
 	Timeout    time.Duration
 	OutputRoot string
-	// HTTPClient overrides the default client (native: timeout-only; js/wasm: host-bridged transport + fetch fallback).
-	HTTPClient *http.Client
+	// HTTP overrides the default retryable client. Nil uses netclient.New(Timeout).
+	// WASM should pass netclient.FromStdHTTP(host *http.Client) from cmd/kbsink-wasm.
+	HTTP *httpclient.HTTP
+	// Driver overrides the plugin HTML driver for article fetch. Nil uses the plugin default.
+	// WASM sets prefetchDriver when the host supplies pageHTML.
+	Driver core.Driver
 	// Storage receives Save after conversion. Nil uses nop storage.
 	Storage core.Storage
+	// KbsinkLog enables logging inside kbsink.Converter (nil disables).
+	KbsinkLog klog.Logger
+	// LogLevel filters kbsink logs (debug|info|warn|error). Empty means no extra filter.
+	LogLevel string
 }
 
 // ArticleJSON is the JSON-friendly conversion result (asset bytes as base64).
@@ -93,21 +104,25 @@ func Convert(ctx context.Context, p Params) (*ArticleJSON, error) {
 }
 
 func convertPipeline(ctx context.Context, p Params) (*core.ArticleResult, string, error) {
+	log := slog.Default()
 	url := strings.TrimSpace(p.URL)
 	if url == "" {
 		return nil, "", fmt.Errorf("url is required")
 	}
 
 	EnsurePluginsRegistered()
+	log.Info("convert start", "url", url)
 
 	pluginName := strings.TrimSpace(p.Plugin)
 	if pluginName == "" {
 		var ok bool
 		pluginName, ok = DetectPlugin(url)
 		if !ok {
+			log.Warn("plugin detection failed", "url", url)
 			return nil, "", fmt.Errorf("could not infer plugin from URL; set explicitly (wechat, xhs, douyin); registered: %s",
 				strings.Join(pluginreg.Names(), ", "))
 		}
+		log.Debug("plugin detected", "plugin", pluginName)
 	}
 	pluginName = strings.ToLower(pluginName)
 
@@ -122,46 +137,72 @@ func convertPipeline(ctx context.Context, p Params) (*core.ArticleResult, string
 			pluginName, strings.Join(pluginreg.Names(), ", "))
 	}
 
-	client := p.HTTPClient
-	if client == nil {
-		return nil, "", fmt.Errorf("http client is nil: Params.HTTPClient must be non-nil")
+	httpClient := p.HTTP
+	if httpClient == nil {
+		httpClient = netclient.New(p.Timeout)
 	}
+	coreHTTP := netclient.CoreHTTPClient(httpClient)
 
-	parser, driver, err := pl.NewComponents(client)
+	parser, driver, err := pl.NewComponents(coreHTTP)
 	if err != nil {
 		return nil, "", fmt.Errorf("plugin %q: %w", pluginName, err)
 	}
 	if parser == nil {
 		return nil, "", fmt.Errorf("plugin %q returned nil parser", pluginName)
 	}
+	if p.Driver != nil {
+		driver = p.Driver
+	}
 
 	store := core.Storage(nopStorage{})
 	if p.Storage != nil {
 		store = p.Storage
 	}
-	opts := []kbsink.Option{
-		kbsink.WithHTTPClient(client),
-		kbsink.WithParser(parser),
-		kbsink.WithStorage(store),
-	}
-	if driver != nil {
-		opts = append(opts, kbsink.WithDriver(driver))
-	}
-	converter := kbsink.NewConverter(opts...)
 
 	outputRoot := strings.TrimSpace(p.OutputRoot)
 	if outputRoot == "" {
 		outputRoot = "output"
 	}
 
-	res, err := converter.Convert(ctx, url, core.ConvertOptions{
-		OutputRoot: outputRoot,
-		VideoMode:  mode,
-	})
-	if err != nil {
-		return nil, "", err
+	downloadCtx := ctx
+	if p.Timeout > 0 {
+		var cancelDownload context.CancelFunc
+		downloadCtx, cancelDownload = context.WithTimeout(ctx, p.Timeout)
+		defer cancelDownload()
 	}
 
+	dlOpts := []kbsink.Option{
+		kbsink.WithHTTPClient(coreHTTP),
+		kbsink.WithDriver(driver),
+		kbsink.WithParser(parser),
+		kbsink.WithStorage(store),
+	}
+	if p.KbsinkLog != nil {
+		dlOpts = append(dlOpts, kbsink.WithLogger(p.KbsinkLog))
+	}
+	if lvl := strings.TrimSpace(p.LogLevel); lvl != "" {
+		min, err := klog.ParseLevel(lvl)
+		if err != nil {
+			return nil, "", err
+		}
+		dlOpts = append(dlOpts, kbsink.WithMinLevel(min))
+	}
+	dlConverter := kbsink.NewConverter(dlOpts...)
+
+	convertOpts := core.ConvertOptions{
+		OutputRoot: outputRoot,
+		VideoMode:  mode,
+	}
+
+	log.Info("convert running", "plugin", pluginName, "videoMode", mode, "outputRoot", outputRoot)
+	res, err := dlConverter.Convert(downloadCtx, url, convertOpts)
+	if err != nil {
+		log.Error("convert failed", "plugin", pluginName, "err", err)
+		return nil, "", err
+	}
+	logParsedArticle(log, res, pluginName)
+
+	log.Info("convert done", "plugin", pluginName, "title", res.Title, "assets", len(res.Assets))
 	return res, pluginName, nil
 }
 

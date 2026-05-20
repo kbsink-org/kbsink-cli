@@ -8,15 +8,18 @@
 //
 // Load with GOROOT's lib/wasm/wasm_exec.js (Go 1.25+) or misc/wasm/wasm_exec.js, then call globalThis.kbsinkConvertJSON(reqJsonString).
 // Optional: globalThis.kbsinkHTTPRoundTrip — host-backed net/http (bridge.go, README).
+// Optional: globalThis.kbsinkLog — host log sink (jslog.go).
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"syscall/js"
 	"time"
 
 	"github.com/kbsink-org/kbsink-cli/internal/convertlib"
+	"github.com/kbsink-org/kbsink-cli/internal/netclient"
 )
 
 func main() {
@@ -32,6 +35,8 @@ type wasmRequest struct {
 	VideoMode  string `json:"videoMode,omitempty"`
 	TimeoutMs  int    `json:"timeoutMs,omitempty"`
 	OutputRoot string `json:"outputRoot,omitempty"`
+	// PageHTML: article HTML prefetched by the host (skips wasm HTTP for the main page).
+	PageHTML string `json:"pageHTML,omitempty"`
 }
 
 type wasmResponse struct {
@@ -64,16 +69,22 @@ func convertJSON(this js.Value, args []js.Value) any {
 		defer cancel()
 	}
 
-	res, err := convertlib.Convert(ctx, convertlib.Params{
+	params := convertlib.Params{
 		URL:        req.URL,
 		Plugin:     req.Plugin,
 		VideoMode:  req.VideoMode,
 		Timeout:    timeout,
 		OutputRoot: req.OutputRoot,
-		HTTPClient: NewHostBridgedHTTPClient(timeout),
-	})
+		HTTP: netclient.FromHostHTTP(NewHostBridgedHTTPClient()),
+		KbsinkLog:  JSLogger{},
+	}
+	if html := strings.TrimSpace(req.PageHTML); html != "" {
+		params.Driver = prefetchDriver(req.URL, html)
+	}
+
+	res, err := convertlib.Convert(ctx, params)
 	if err != nil {
-		return mustJSON(wasmResponse{OK: false, Error: err.Error()})
+		return mustJSON(wasmResponse{OK: false, Error: convertlib.ErrChainString(err)})
 	}
 	return mustJSON(wasmResponse{OK: true, Result: res})
 }

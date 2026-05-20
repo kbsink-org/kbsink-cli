@@ -1,11 +1,8 @@
 package wechat
 
 import (
-	"net/http"
-
 	"github.com/kbsink-org/kbsink/pkg/core"
-	"github.com/kbsink-org/kbsink/pkg/driver"
-	"github.com/kbsink-org/kbsink/pkg/parser"
+	wechatlib "github.com/kbsink-org/kbsink-plugins/pkg/wechat"
 )
 
 // Plugin is the WeChat article plugin (parser + fetch driver) for CLI wiring.
@@ -18,6 +15,6 @@ func New() core.Plugin {
 
 func (Plugin) Name() string { return "wechat" }
 
-func (Plugin) NewComponents(client *http.Client) (core.Parser, core.Driver, error) {
-	return parser.NewWechatParser(), driver.NewWechatDriver(client), nil
+func (Plugin) NewComponents(client core.HTTPClient) (core.Parser, core.Driver, error) {
+	return wechatlib.NewParser(), wechatlib.NewDriver(client), nil
 }

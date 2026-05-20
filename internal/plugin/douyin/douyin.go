@@ -1,9 +1,7 @@
 package douyin
 
 import (
-	"net/http"
-
-	douyinlib "github.com/kbsink-org/douyin-plugin/pkg/douyin"
+	douyinlib "github.com/kbsink-org/kbsink-plugins/pkg/douyin"
 	"github.com/kbsink-org/kbsink/pkg/core"
 )
 
@@ -17,6 +15,6 @@ func New() core.Plugin {
 
 func (Plugin) Name() string { return "douyin" }
 
-func (Plugin) NewComponents(c *http.Client) (core.Parser, core.Driver, error) {
+func (Plugin) NewComponents(c core.HTTPClient) (core.Parser, core.Driver, error) {
 	return douyinlib.NewParser(), douyinlib.NewDriver(c), nil
 }

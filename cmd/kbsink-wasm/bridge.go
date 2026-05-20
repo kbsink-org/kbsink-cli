@@ -51,6 +51,7 @@ func flattenHeaders(h http.Header) map[string]string {
 type HostTransport struct{}
 
 func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	log := JSLogger{}
 	fn := js.Global().Get(GlobalJSName)
 	if fn.Type() != js.TypeFunction {
 		return http.DefaultTransport.RoundTrip(req)
@@ -64,6 +65,7 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
+		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
 	payload := jsHTTPRequest{
@@ -74,6 +76,7 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if len(body) > 0 {
 		payload.BodyB64 = base64.StdEncoding.EncodeToString(body)
 	}
+
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -145,21 +148,35 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	})
 	promise.Call("then", success, failure)
 
+	// Prefer a completed host response over context expiry (requestUrl can finish
+	// at the same instant as Client/context deadline — especially ~3MB WeChat HTML).
 	select {
-	case <-req.Context().Done():
-		return nil, req.Context().Err()
 	case resp := <-respCh:
 		return resp, nil
 	case err := <-errCh:
+		log.Warn("http host bridge: error", "method", req.Method, "url", req.URL.String(), "err", err)
 		return nil, err
+	case <-req.Context().Done():
+		grace := time.NewTimer(90 * time.Second)
+		defer grace.Stop()
+		select {
+		case resp := <-respCh:
+			return resp, nil
+		case err := <-errCh:
+			return nil, err
+		case <-grace.C:
+			return nil, req.Context().Err()
+		}
 	}
 }
 
 // NewHostBridgedHTTPClient returns an [http.Client] whose transport is [HostTransport]
-// (host hook + fallback). Timeout matches [net/http.Client.Timeout] semantics.
-func NewHostBridgedHTTPClient(timeout time.Duration) *http.Client {
+// (host hook + fallback). Timeout is 0: each request uses [http.Request.Context]
+// from convert (context.WithTimeout). Do not set [http.Client.Timeout] here — it
+// counts the entire host RoundTrip (Obsidian requestUrl) and races with slow pages.
+func NewHostBridgedHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout:   timeout,
+		Timeout:   0,
 		Transport: HostTransport{},
 	}
 }

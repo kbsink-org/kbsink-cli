@@ -4,7 +4,7 @@ Command-line front-end for [kbsink](https://github.com/kbsink-org/kbsink): conve
 
 ## Install
 
-From a clone that includes `kbsink` and `douyin-plugin` as siblings (or adjust `replace` in `go.mod`):
+From a clone that includes `kbsink` and `kbsink-plugins` as siblings (or adjust `replace` in `go.mod`):
 
 ```bash
 go install ./cmd/kbsink
@@ -75,4 +75,4 @@ kbsink --plugin douyin -video-mode=embed -o output "https://v.douyin.com/xxxx/"
 | Role | Module |
 |------|--------|
 | Core conversion | `github.com/kbsink-org/kbsink` |
-| Douyin parser/driver | `github.com/kbsink-org/douyin-plugin` |
+| Platform plugins | `github.com/kbsink-org/kbsink-plugins` |

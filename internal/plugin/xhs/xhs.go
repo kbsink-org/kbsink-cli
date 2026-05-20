@@ -1,11 +1,8 @@
 package xhs
 
 import (
-	"net/http"
-
 	"github.com/kbsink-org/kbsink/pkg/core"
-	"github.com/kbsink-org/kbsink/pkg/driver"
-	"github.com/kbsink-org/kbsink/pkg/parser"
+	xhslib "github.com/kbsink-org/kbsink-plugins/pkg/xhs"
 )
 
 // Plugin is the XHS (小红书) plugin (parser + fetch driver) for CLI wiring.
@@ -18,6 +15,6 @@ func New() core.Plugin {
 
 func (Plugin) Name() string { return "xhs" }
 
-func (Plugin) NewComponents(client *http.Client) (core.Parser, core.Driver, error) {
-	return parser.NewXHSParser(), driver.NewXHSDriver(client), nil
+func (Plugin) NewComponents(client core.HTTPClient) (core.Parser, core.Driver, error) {
+	return xhslib.NewParser(), xhslib.NewDriver(client), nil
 }

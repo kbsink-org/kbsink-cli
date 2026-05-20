@@ -8,7 +8,12 @@ import (
 
 var firstURLPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
-// DetectPlugin returns a plugin id (wechat, xhs, douyin) inferred from raw input
+// firstURLInText returns the first http(s) URL in s, or empty if none.
+func firstURLInText(s string) string {
+	return firstURLPattern.FindString(s)
+}
+
+// DetectPlugin returns a plugin id inferred from raw input
 // (a URL or text containing an http(s) URL). The second return is false if unknown.
 func DetectPlugin(raw string) (string, bool) {
 	s := strings.TrimSpace(raw)
@@ -16,15 +21,18 @@ func DetectPlugin(raw string) (string, bool) {
 		return "", false
 	}
 	candidate := s
-	if m := firstURLPattern.FindString(s); m != "" {
-		candidate = m
+	if u := firstURLInText(s); u != "" {
+		candidate = u
 	}
-	u, err := url.Parse(candidate)
-	if err != nil || u.Host == "" {
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Host == "" {
 		return "", false
 	}
-	host := strings.ToLower(u.Hostname())
+	return pluginForHost(parsed.Hostname())
+}
 
+func pluginForHost(host string) (string, bool) {
+	host = strings.ToLower(host)
 	switch {
 	case strings.Contains(host, "weixin.qq.com"):
 		return "wechat", true
