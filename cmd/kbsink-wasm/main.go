@@ -7,8 +7,8 @@
 //	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o kbsink.wasm ./cmd/kbsink-wasm
 //
 // Load with GOROOT's lib/wasm/wasm_exec.js (Go 1.25+) or misc/wasm/wasm_exec.js, then call globalThis.kbsinkConvertJSON(reqJsonString).
-// Optional: globalThis.kbsinkHTTPRoundTrip — host-backed net/http (bridge.go, README).
 // Optional: globalThis.kbsinkLog — host log sink (jslog.go).
+// HTTP uses globalThis.kbsinkHTTPRoundTrip when set (bridge.go); scripts/run-wasm.mjs installs it for Node.
 package main
 
 import (
@@ -35,8 +35,6 @@ type wasmRequest struct {
 	VideoMode  string `json:"videoMode,omitempty"`
 	TimeoutMs  int    `json:"timeoutMs,omitempty"`
 	OutputRoot string `json:"outputRoot,omitempty"`
-	// PageHTML: article HTML prefetched by the host (skips wasm HTTP for the main page).
-	PageHTML string `json:"pageHTML,omitempty"`
 }
 
 type wasmResponse struct {
@@ -58,7 +56,18 @@ func convertJSON(this js.Value, args []js.Value) any {
 		return mustJSON(wasmResponse{OK: false, Error: "field \"url\" is required"})
 	}
 
-	timeout := 60 * time.Second
+	convertlib.EnsurePluginsRegistered()
+	pluginName := strings.TrimSpace(req.Plugin)
+	if pluginName == "" {
+		var ok bool
+		pluginName, ok = convertlib.DetectPlugin(req.URL)
+		if !ok {
+			return mustJSON(wasmResponse{OK: false, Error: "field \"plugin\" is required (wechat, xhs, douyin), or use a URL with a recognized host"})
+		}
+	}
+	pluginName = strings.ToLower(pluginName)
+
+	timeout := 10 * time.Minute
 	if req.TimeoutMs > 0 {
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
@@ -69,20 +78,15 @@ func convertJSON(this js.Value, args []js.Value) any {
 		defer cancel()
 	}
 
-	params := convertlib.Params{
+	res, err := convertlib.Convert(ctx, convertlib.Params{
 		URL:        req.URL,
-		Plugin:     req.Plugin,
+		Plugin:     pluginName,
 		VideoMode:  req.VideoMode,
 		Timeout:    timeout,
 		OutputRoot: req.OutputRoot,
-		HTTP: netclient.FromHostHTTP(NewHostBridgedHTTPClient()),
+		HTTP:       netclient.FromHostHTTP(NewHostBridgedHTTPClient()),
 		KbsinkLog:  JSLogger{},
-	}
-	if html := strings.TrimSpace(req.PageHTML); html != "" {
-		params.Driver = prefetchDriver(req.URL, html)
-	}
-
-	res, err := convertlib.Convert(ctx, params)
+	})
 	if err != nil {
 		return mustJSON(wasmResponse{OK: false, Error: convertlib.ErrChainString(err)})
 	}

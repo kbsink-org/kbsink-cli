@@ -40,17 +40,16 @@ Request shape:
 
 `plugin` is optional if the URL host is recognized (same rules as the CLI). `videoMode` is `link` or `embed` (default `link`). The wasm build uses in-memory storage only: the response includes `markdown` and each asset’s `dataBase64` instead of writing to the host filesystem.
 
-In a **browser** tab, article and CDN requests are subject to **CORS**; hosts that do not allow your origin may fail. **Node.js** (or another non-browser runtime with the same `wasm_exec` bridge) is often easier for unrestricted HTTP.
+In a **browser** tab, article and CDN requests are subject to **CORS**; **Node.js** with `wasm_exec.js` is often easier for unrestricted HTTP.
 
-#### Host HTTP hook (`net/http` transport)
+#### Build and run (Node)
 
-The wasm build’s default `*http.Client` uses **`HostTransport`** from **`cmd/kbsink-wasm`** (`bridge.go`, only linked into `kbsink.wasm`): each request goes through **`globalThis.kbsinkHTTPRoundTrip`** when that property is a function; otherwise it falls back to the normal js/wasm `fetch` transport.
+```bash
+./scripts/build-wasm.sh
+node ./scripts/run-wasm.mjs "https://mp.weixin.qq.com/s/…"
+```
 
-- **Signature:** `kbsinkHTTPRoundTrip(payloadJson: string): Promise<string>`
-- **Request JSON:** `{ "method": "GET", "url": "https://…", "headers": { "K": "V" }, "bodyB64": "<optional base64>" }`
-- **Response JSON:** `{ "status": 200, "statusText": "OK", "headers": { … }, "bodyBase64": "<base64>" }` (empty or omitted `bodyBase64` means no body)
-
-Implement this in Obsidian with **`requestUrl`**, or in Node with plain `http`/`https`, to bypass browser CORS while keeping conversion logic in Go.
+`run-wasm.mjs` loads `kbsink.wasm`, installs a Node `fetch` HTTP bridge (avoids broken Go wasm DNS on some Macs), runs a conversion, and writes Markdown plus assets under `-o` (default `output`).
 
 ## Usage
 

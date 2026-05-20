@@ -46,15 +46,13 @@ func (nopStorage) Save(ctx context.Context, article *core.ArticleResult) error {
 // CLI should pass storage.NewLocalStorage(outputRoot) from github.com/kbsink-org/kbsink/pkg/storage.
 type Params struct {
 	URL        string
-	Plugin     string
+	Plugin     string // required: wechat, xhs, douyin (callers resolve via DetectPlugin when needed)
 	VideoMode  string
 	Timeout    time.Duration
 	OutputRoot string
 	// HTTP overrides the default retryable client. Nil uses netclient.New(Timeout).
-	// WASM should pass netclient.FromStdHTTP(host *http.Client) from cmd/kbsink-wasm.
 	HTTP *httpclient.HTTP
 	// Driver overrides the plugin HTML driver for article fetch. Nil uses the plugin default.
-	// WASM sets prefetchDriver when the host supplies pageHTML.
 	Driver core.Driver
 	// Storage receives Save after conversion. Nil uses nop storage.
 	Storage core.Storage
@@ -111,20 +109,12 @@ func convertPipeline(ctx context.Context, p Params) (*core.ArticleResult, string
 	}
 
 	EnsurePluginsRegistered()
-	log.Info("convert start", "url", url)
+	log.Info("convert start", "url", url, "plugin", p.Plugin)
 
-	pluginName := strings.TrimSpace(p.Plugin)
+	pluginName := strings.ToLower(strings.TrimSpace(p.Plugin))
 	if pluginName == "" {
-		var ok bool
-		pluginName, ok = DetectPlugin(url)
-		if !ok {
-			log.Warn("plugin detection failed", "url", url)
-			return nil, "", fmt.Errorf("could not infer plugin from URL; set explicitly (wechat, xhs, douyin); registered: %s",
-				strings.Join(pluginreg.Names(), ", "))
-		}
-		log.Debug("plugin detected", "plugin", pluginName)
+		return nil, "", fmt.Errorf("plugin is required")
 	}
-	pluginName = strings.ToLower(pluginName)
 
 	mode, err := resolveVideoMode(p.VideoMode)
 	if err != nil {

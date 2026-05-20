@@ -1,9 +1,11 @@
 package xhs
 
 import (
-	"github.com/kbsink-org/kbsink/pkg/core"
 	xhslib "github.com/kbsink-org/kbsink-plugins/pkg/xhs"
+	"github.com/kbsink-org/kbsink/pkg/core"
 )
+
+const XHSUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 
 // Plugin is the XHS (小红书) plugin (parser + fetch driver) for CLI wiring.
 type Plugin struct{}

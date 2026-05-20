@@ -12,7 +12,10 @@ import (
 	"log/slog"
 
 	"github.com/kbsink-org/kbsink-cli/internal/convertlib"
+	clidriver "github.com/kbsink-org/kbsink-cli/internal/driver"
 	"github.com/kbsink-org/kbsink-cli/internal/netclient"
+	"github.com/kbsink-org/kbsink-cli/internal/plugin/wechat"
+	"github.com/kbsink-org/kbsink-cli/internal/plugin/xhs"
 	"github.com/kbsink-org/kbsink/pkg/core"
 	klog "github.com/kbsink-org/kbsink/pkg/logger"
 	"github.com/kbsink-org/kbsink/pkg/pluginreg"
@@ -62,6 +65,21 @@ func run(args []string) int {
 		return 2
 	}
 
+	pluginName := strings.TrimSpace(*pluginFlag)
+	if pluginName == "" {
+		var ok bool
+		pluginName, ok = convertlib.DetectPlugin(articleURL)
+		if !ok {
+			_, _ = fmt.Fprintf(os.Stderr, "could not infer plugin from URL; use --plugin (wechat, xhs, douyin)\n")
+			if names := pluginreg.Names(); len(names) > 0 {
+				_, _ = fmt.Fprintf(os.Stderr, "registered: %s\n", strings.Join(names, ", "))
+			}
+			return 2
+		}
+		slog.Default().Debug("plugin detected", "plugin", pluginName)
+	}
+	pluginName = strings.ToLower(pluginName)
+
 	ctx := context.Background()
 	if *timeout > 0 {
 		var cancel context.CancelFunc
@@ -74,16 +92,27 @@ func run(args []string) int {
 		outRoot = "output"
 	}
 
+	log := klog.Slog{L: slog.Default()}
+	httpClient := netclient.New(*timeout)
+	coreHTTP := netclient.CoreHTTPClient(httpClient)
+
+	drv, err := pluginDriver(pluginName, coreHTTP, log)
+	if err != nil {
+		emitError(err)
+		return 1
+	}
+
 	res, err := convertlib.ConvertArticle(ctx, convertlib.Params{
 		URL:        articleURL,
-		Plugin:     strings.TrimSpace(*pluginFlag),
+		Plugin:     pluginName,
 		VideoMode:  *videoMode,
 		Timeout:    *timeout,
 		OutputRoot: outRoot,
-		HTTP:       netclient.New(*timeout),
-		Storage:    storage.NewLocalStorage(outRoot, nil),
-		KbsinkLog:  klog.Slog{L: slog.Default()},
+		HTTP:       httpClient,
+		Storage:    storage.NewLocalStorage(outRoot, log),
+		KbsinkLog:  log,
 		LogLevel:   *logLevel,
+		Driver:     drv,
 	})
 	if err != nil {
 		emitError(err)
@@ -92,6 +121,20 @@ func run(args []string) int {
 
 	emitSuccess(res)
 	return 0
+}
+
+// pluginDriver returns the fetch driver for a built-in plugin id.
+func pluginDriver(plugin string, client core.HTTPClient, log klog.Logger) (core.Driver, error) {
+	switch strings.ToLower(strings.TrimSpace(plugin)) {
+	case "wechat":
+		return clidriver.NewDriver(client, wechat.WeChatUserAgent, log), nil
+	case "xhs":
+		return clidriver.NewDriver(client, xhs.XHSUserAgent, log), nil
+	case "douyin":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown plugin %q for driver", plugin)
+	}
 }
 
 func emitError(err error) {

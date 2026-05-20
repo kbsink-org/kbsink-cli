@@ -1,10 +1,12 @@
 //go:build js && wasm
 
-// Host-backed HTTP for kbsink.wasm: HostTransport delegates to globalThis.kbsinkHTTPRoundTrip (see kbsink-cli README).
+// Host-backed HTTP for kbsink.wasm: HostTransport delegates to globalThis.kbsinkHTTPRoundTrip.
+// Node hosts should install the hook before go.run (see scripts/run-wasm.mjs).
 package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -19,10 +21,23 @@ import (
 const GlobalJSName = "kbsinkHTTPRoundTrip"
 
 type jsHTTPRequest struct {
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers,omitempty"`
-	BodyB64 string            `json:"bodyB64,omitempty"`
+	Method    string            `json:"method"`
+	URL       string            `json:"url"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	BodyB64   string            `json:"bodyB64,omitempty"`
+	TimeoutMs int               `json:"timeoutMs,omitempty"`
+}
+
+func contextTimeoutMs(ctx context.Context) int {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return 0
+	}
+	ms := int(time.Until(deadline).Milliseconds())
+	if ms < 1 {
+		return 1
+	}
+	return ms
 }
 
 type jsHTTPResponse struct {
@@ -46,12 +61,11 @@ func flattenHeaders(h http.Header) map[string]string {
 	return out
 }
 
-// HostTransport implements [http.RoundTripper] by calling the host JS hook when set;
+// HostTransport implements [http.RoundTripper] via the host JS hook when set;
 // otherwise it falls back to [http.DefaultTransport].
 type HostTransport struct{}
 
 func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	log := JSLogger{}
 	fn := js.Global().Get(GlobalJSName)
 	if fn.Type() != js.TypeFunction {
 		return http.DefaultTransport.RoundTrip(req)
@@ -69,9 +83,10 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	payload := jsHTTPRequest{
-		Method:  req.Method,
-		URL:     req.URL.String(),
-		Headers: flattenHeaders(req.Header),
+		Method:    req.Method,
+		URL:       req.URL.String(),
+		Headers:   flattenHeaders(req.Header),
+		TimeoutMs: contextTimeoutMs(req.Context()),
 	}
 	if len(body) > 0 {
 		payload.BodyB64 = base64.StdEncoding.EncodeToString(body)
@@ -141,23 +156,20 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	failure = js.FuncOf(func(this js.Value, args []js.Value) any {
 		success.Release()
 		failure.Release()
-		err := args[0]
-		msg := err.Call("toString").String()
+		msg := args[0].Call("toString").String()
 		errCh <- fmt.Errorf("%s: %s", GlobalJSName, msg)
 		return nil
 	})
 	promise.Call("then", success, failure)
 
-	// Prefer a completed host response over context expiry (requestUrl can finish
-	// at the same instant as Client/context deadline — especially ~3MB WeChat HTML).
 	select {
 	case resp := <-respCh:
 		return resp, nil
 	case err := <-errCh:
-		log.Warn("http host bridge: error", "method", req.Method, "url", req.URL.String(), "err", err)
 		return nil, err
 	case <-req.Context().Done():
-		grace := time.NewTimer(90 * time.Second)
+		// Brief grace: host fetch may finish at the same instant as the Go deadline.
+		grace := time.NewTimer(10 * time.Second)
 		defer grace.Stop()
 		select {
 		case resp := <-respCh:
@@ -170,10 +182,7 @@ func (HostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 }
 
-// NewHostBridgedHTTPClient returns an [http.Client] whose transport is [HostTransport]
-// (host hook + fallback). Timeout is 0: each request uses [http.Request.Context]
-// from convert (context.WithTimeout). Do not set [http.Client.Timeout] here — it
-// counts the entire host RoundTrip (Obsidian requestUrl) and races with slow pages.
+// NewHostBridgedHTTPClient returns an [http.Client] using [HostTransport].
 func NewHostBridgedHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout:   0,

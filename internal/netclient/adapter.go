@@ -30,26 +30,17 @@ func (a requesterAdapter) Do(req *http.Request) (*http.Response, error) {
 	return a.r.Do(rreq)
 }
 
-// FromStdHTTP wraps a standard *http.Client in *httpclient.HTTP (retryable transport).
-func FromStdHTTP(c *http.Client) *httpclient.HTTP {
-	return wrapStdHTTP(c, false)
-}
-
 // FromHostHTTP wraps a host-bridged *http.Client for WASM (no automatic retries).
+// The host must implement globalThis.kbsinkHTTPRoundTrip (see cmd/kbsink-wasm/bridge.go).
 func FromHostHTTP(c *http.Client) *httpclient.HTTP {
-	return wrapStdHTTP(c, true)
-}
-
-func wrapStdHTTP(c *http.Client, host bool) *httpclient.HTTP {
 	if c == nil {
 		c = http.DefaultClient
 	}
 	rc := retryablehttp.NewClient()
 	rc.HTTPClient = c
-	opts := []httpclient.ClientOption{httpclient.WithRetryableClient(rc)}
-	if host {
-		rc.RetryMax = 0
-		opts = append(opts, httpclient.WithCheckRetry(retry.NoCheckRetryFn))
-	}
-	return httpclient.New(opts...)
+	rc.RetryMax = 0
+	return httpclient.New(
+		httpclient.WithRetryableClient(rc),
+		httpclient.WithCheckRetry(retry.NoCheckRetryFn),
+	)
 }
