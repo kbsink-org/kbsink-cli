@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/SolaTyolo/httpclient v1.0.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
-	github.com/kbsink-org/kbsink v1.7.1
+	github.com/kbsink-org/kbsink v1.7.2
 	github.com/kbsink-org/kbsink-plugins v1.2.1
 )
 

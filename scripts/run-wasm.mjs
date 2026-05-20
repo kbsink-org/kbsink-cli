@@ -31,7 +31,7 @@ function installHTTPBridge() {
         "-o",
         bodyPath,
         "-w",
-        "%{http_code}",
+        "%{http_code}\n%{content_type}",
         "-X",
         req.method || "GET",
         ...Object.entries(req.headers ?? {}).flatMap(([k, v]) => ["-H", `${k}: ${v}`]),
@@ -43,8 +43,13 @@ function installHTTPBridge() {
         throw new Error(out.stderr?.trim() || `curl exit ${out.status}`);
       }
       const body = readFileSync(bodyPath);
+      const lines = String(out.stdout ?? "").trim().split("\n");
+      const status = Number.parseInt(lines[0] ?? "0", 10) || 0;
+      const contentType = (lines[1] ?? "").trim();
+      const headers = contentType ? { "Content-Type": contentType } : {};
       return JSON.stringify({
-        status: Number.parseInt(String(out.stdout).trim(), 10) || 0,
+        status,
+        headers,
         bodyBase64: body.length ? body.toString("base64") : "",
       });
     } finally {
